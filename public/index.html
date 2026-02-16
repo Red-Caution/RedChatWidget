@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Red's Bad Chat Widget</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
+
+<style>
+:root {
+    --primary: #406092;
+    --bubble: rgba(255,255,255,0.85);
+    --text: #080e16;
+    --shadow: rgba(64, 96, 146, 0.15);
+    --background: #93a8ca;
+}
+
+/* Transparent background for OBS */
+body {
+    height: 720px;
+    width: 400px;
+    margin: 0;
+    background: transparent;
+    font-family: 'Quicksand', sans-serif;
+    color: var(--text);
+    overflow: hidden;
+}   
+
+#chat {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    gap: 12px;
+    float: left;
+}
+
+/* =========================
+   MESSAGE
+========================= */
+
+.message {
+    max-width: 80%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    background: var(--bubble);
+    box-shadow: 0 4px 12px var(--shadow);
+    animation: slideInLeft 0.4s ease forwards;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Slide animation */
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-40px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Username */
+.username {
+    font-weight: 600;
+    margin-right: 6px;
+}
+
+/* Badges */
+.badge {
+    height: 18px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+/* Role colors */
+.message.viewer {
+    border-left: 6px solid var(--primary);
+    background: solid var(--background);
+}
+
+.message.moderator {
+    border-left: 6px solid #2e7d32;
+    background: rgb(151, 235, 160);
+    float:right;
+    text-align: right;
+}
+
+.message.vip {
+    border-left: 6px solid #682cb6;
+    background: rgb(189, 134, 235);
+    float:right;
+    text-align: right;
+}
+
+.message.subscriber {
+    border-left: 6px solid rgba(9, 21, 78, 1);
+    background: rgb(107, 161, 231);
+}
+
+.message.broadcaster {
+    border-left: 6px solid #b23a48;
+    background: rgb(238, 162, 172);
+    float:right;
+    text-align: right;
+}
+
+/* Emotes */
+.emote {
+    height: 30px;
+    vertical-align: middle;
+    margin: 0 2px;
+}
+
+/* Fade old messages */
+.fade-out {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+</style>
+</head>
+
+<body>
+<div id="chat"></div>
+
+<script src="https://unpkg.com/comfy.js@latest/dist/comfy.min.js"></script>
+
+<script>
+const channelName = "redcaution_"; // 🔥 Replace with your Twitch login
+const chatContainer = document.getElementById("chat");
+let emoteMap = {};
+const messageLimit = 30;
+
+/* =========================
+   LOAD EMOTES
+========================= */
+async function loadEmotes() {
+    try {
+        const res = await fetch('/api/emotes');
+        const emotes = await res.json();
+
+        emoteMap = {};
+        emotes.forEach(e => { emoteMap[e.name] = e.link; });
+        console.log("Emotes loaded:", Object.keys(emoteMap).length);
+    } catch (err) {
+        console.error("Emote load failed:", err);
+    }
+}
+
+/* =========================
+   REPLACE EMOTES
+========================= */
+function replaceEmotes(message) {
+    return message.split(" ").map(word => {
+        if (emoteMap[word]) return `<img src="${emoteMap[word]}" class="emote" />`;
+        return word;
+    }).join(" ");
+}
+
+/* =========================
+   BADGES
+========================= */
+function getBadgesHTML(badges) {
+    if (!badges) return "";
+    let html = "";
+    if (badges.broadcaster) html += `<img class="badge" src="${badges.broadcaster.url}" />`;
+    if (badges.mod) html += `<img class="badge" src="${badges.mod.url}" />`;
+    if (badges.vip) html += `<img class="badge" src="${badges.vip.url}" />`;
+    if (badges.subscriber) html += `<img class="badge" src="${badges.subscriber.url}" />`;
+    return html;
+}
+
+/* =========================
+   ROLE CLASS
+========================= */
+function getRoleClass(flags) {
+    if (flags.broadcaster) return "broadcaster";
+    if (flags.mod) return "moderator";
+    if (flags.vip) return "vip";
+    if (flags.subscriber) return "subscriber";
+    return "viewer";
+}
+
+/* =========================
+   ADD MESSAGE
+========================= */
+function addMessage(user, message, flags, badges) {
+    const roleClass = getRoleClass(flags);
+    const formattedMessage = replaceEmotes(message);
+    const badgesHTML = getBadgesHTML(badges);
+
+    const div = document.createElement("div");
+    div.classList.add("message", roleClass);
+    div.innerHTML = `
+        ${badgesHTML}
+        <span class="username">${user}:</span>
+        <span>${formattedMessage}</span>
+    `;
+
+    chatContainer.appendChild(div);
+
+    if (chatContainer.children.length > messageLimit) {
+        const first = chatContainer.firstChild;
+        first.classList.add("fade-out");
+        setTimeout(() => first.remove(), 500);
+    }
+}
+
+/* =========================
+   COMFYJS CONNECTION
+========================= */
+ComfyJS.Init(channelName);
+
+ComfyJS.onChat = (user, message, flags, self, extra) => {
+    if (self) return;
+    addMessage(user, message, flags, extra.badges);
+};
+
+/* =========================
+   INIT
+========================= */
+loadEmotes();
+</script>
+</body>
+</html>
